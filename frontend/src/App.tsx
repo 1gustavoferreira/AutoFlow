@@ -47,7 +47,7 @@ export function App() {
   // Estado de Edição de OS Existente
   const [editingOrder, setEditingOrder] = useState<ServiceOrder | null>(null);
 
-  // Form State (Cadastro / Edição)
+  // Form State
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [vehiclePlate, setVehiclePlate] = useState('');
@@ -59,7 +59,6 @@ export function App() {
   const [itemInputPrice, setItemInputPrice] = useState('');
   const [itemInputType, setItemInputType] = useState<'SERVICO' | 'PECA'>('SERVICO');
 
-  // Soma apenas itens ATIVOS (itens dispensados contam R$ 0.00)
   const calculatedTotal = useMemo(() => {
     return items
       .filter(it => it.status !== 'DISPENSADO')
@@ -262,17 +261,43 @@ export function App() {
     }
   };
 
+  // Gerador de Mensagem Profissional de WhatsApp
   const openWhatsApp = (order: ServiceOrder) => {
-    const dispensados = (order.items || []).filter(it => it.status === 'DISPENSADO');
-    let msgDispensados = '';
-    if (dispensados.length > 0) {
-      msgDispensados = `\n*(Itens checados que não precisaram de troca: ${dispensados.map(d => d.name).join(', ')})*`;
-    }
+    const orderItems = order.items && order.items.length > 0 ? order.items : [];
+    
+    // Lista itens ativos
+    const activeItems = orderItems.filter(it => it.status !== 'DISPENSADO');
+    const itemsText = activeItems.map(it => {
+      const typeLabel = it.type === 'PECA' ? 'Peça' : 'Serviço';
+      return `  • [${typeLabel}] ${it.name}: R$ ${Number(it.price).toFixed(2)}`;
+    }).join('\n');
 
-    const text = encodeURIComponent(
-      `Olá ${order.customerName}! Seu veículo ${order.vehicleModel} (${order.vehiclePlate}) está pronto para retirada no AutoFlow.\nTotal: R$ ${Number(order.totalValue).toFixed(2)}.${msgDispensados}`
-    );
-    window.open(`https://wa.me/55${order.customerPhone}?text=${text}`, '_blank');
+    // Lista itens checados e dispensados (transparência de oficina)
+    const dispensados = orderItems.filter(it => it.status === 'DISPENSADO');
+    const dispensadosText = dispensados.length > 0 
+      ? `\n\n🔍 _Itens checados que não precisaram de troca:_\n${dispensados.map(d => `  ❌ ~${d.name}~ (Dispensado/Sem custo)`).join('\n')}`
+      : '';
+
+    const message = [
+      `🏁 *AUTOFLOW - AVISO DE RETIRADA* 🏁\n`,
+      `Olá, *${order.customerName}*! Tudo bem?`,
+      `O seu veículo passou pelo nosso controle de qualidade e já está finalizado, pronto para retirada! 🚗✨\n`,
+      `📋 *ORDEM DE SERVIÇO:* #${order.id}`,
+      `🚘 *VEÍCULO:* ${order.vehicleModel}`,
+      `🏷️ *PLACA:* ${order.vehiclePlate}\n`,
+      `🛠️ *RESUMO DOS SERVIÇOS:*`,
+      itemsText || `  • ${order.serviceDescription}`,
+      dispensadosText,
+      `\n━━━━━━━━━━━━━━━━━━━━━`,
+      `💰 *VALOR TOTAL:* R$ ${Number(order.totalValue).toFixed(2)}`,
+      `💳 *PAGAMENTO:* ${order.paymentMethod || 'A combinar'}`,
+      `🛡️ *GARANTIA:* 90 dias em peças e mão de obra`,
+      `━━━━━━━━━━━━━━━━━━━━━\n`,
+      `📍 Já estamos à disposição para entrega das chaves. Qualquer dúvida basta nos responder por aqui!`
+    ].filter(Boolean).join('\n');
+
+    const cleanPhone = order.customerPhone.replace(/\D/g, '');
+    window.open(`https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   const filteredOrders = useMemo(() => {
@@ -523,10 +548,11 @@ export function App() {
                         {order.status === 'FINALIZADO' && (
                           <button
                             onClick={() => openWhatsApp(order)}
-                            className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition active:scale-95 shadow-md shadow-red-600/30"
+                            className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition active:scale-95 shadow-md shadow-emerald-600/30"
+                            title="Enviar Extrato no WhatsApp"
                           >
                             <MessageSquare size={13} />
-                            Avisar Whats
+                            Whats PRO
                           </button>
                         )}
 
@@ -636,7 +662,7 @@ export function App() {
         </div>
       )}
 
-      {/* Modal Nova OS / Editar OS Existente com opção de Dispensar Itens */}
+      {/* Modal Nova OS / Editar OS Existente */}
       {showModal && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#141418] border border-neutral-800 w-full max-w-lg rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -760,7 +786,7 @@ export function App() {
                   </button>
                 </div>
 
-                {/* Lista de itens com ação de Dispensar / Remover */}
+                {/* Lista de itens */}
                 <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                   {items.length === 0 ? (
                     <div className="text-center py-4 text-xs text-neutral-600 border border-dashed border-neutral-800 rounded-lg">
@@ -793,7 +819,6 @@ export function App() {
                               R$ {Number(it.price).toFixed(2)}
                             </span>
 
-                            {/* Botão Dispensar / Reativar (Não foi necessário) */}
                             <button
                               type="button"
                               onClick={() => toggleDispensarItem(it.id)}
@@ -807,7 +832,6 @@ export function App() {
                               {isDispensado ? <Undo2 size={14} /> : <Ban size={14} />}
                             </button>
 
-                            {/* Botão Excluir Definitivo */}
                             <button
                               type="button"
                               onClick={() => removeItemFromForm(it.id)}
@@ -851,7 +875,7 @@ export function App() {
         </div>
       )}
 
-      {/* Modal Impressão com Transparência */}
+      {/* Modal Impressão */}
       {selectedReceipt && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white text-black border border-neutral-300 w-full max-w-sm rounded-xl p-5 shadow-2xl font-mono text-xs space-y-3">
