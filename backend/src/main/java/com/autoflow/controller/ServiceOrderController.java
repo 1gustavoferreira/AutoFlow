@@ -40,6 +40,21 @@ public class ServiceOrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(repository.save(order));
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<ServiceOrder> updateOrder(@PathVariable Long id, @Valid @RequestBody OrderRequest request) {
+        ServiceOrder order = repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ordem não encontrada"));
+
+        order.setCustomerName(request.customerName().trim());
+        order.setCustomerPhone(request.customerPhone().replaceAll("\\D", ""));
+        order.setVehiclePlate(request.vehiclePlate().toUpperCase().trim());
+        order.setVehicleModel(request.vehicleModel().trim());
+        order.setServiceDescription(request.serviceDescription().trim());
+        order.setTotalValue(request.totalValue());
+
+        return ResponseEntity.ok(repository.save(order));
+    }
+
     @PatchMapping("/{id}/status")
     public ResponseEntity<ServiceOrder> updateStatus(
             @PathVariable Long id,
